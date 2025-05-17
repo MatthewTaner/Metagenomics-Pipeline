@@ -1,0 +1,58 @@
+rule all:
+	input:
+		"results/kraken2_report.txt",
+		"results/kraken2_output.txt"
+
+rule fetch_SRA_file:
+	output:
+		"data/SRR2584863/SRR2584863.sra"
+	shell:
+		"prefetch SRR2584863 -O data/"
+
+rule extract_fastq:
+        input:
+                "data/SRR2584863/SRR2584863.sra"
+        output:
+                "data/SRR2584863_1.fastq",
+                "data/SRR2584863_2.fastq"
+        shell:
+                "fasterq-dump {input} -O data/"
+
+
+rule trim_reads:
+	input:
+		"data/SRR2584863_1.fastq",
+                "data/SRR2584863_2.fastq"
+	output:
+		"results/SRR2584863_1.trimmed.fastq",
+		"results/SRR2584863_2.trimmed.fastq",
+		"results/fastp_report.html",
+		"results/fastp_report.json"
+	shell:
+		"""
+		fastp \
+			-i {input[0]} -I {input[1]} \
+			-o {output[0]} -O {output[1]} \
+			--detect_adapter_for_pe\
+			--cut_front --cut_tail\
+			--cut_window_size 4 --cut_mean_quality 25 \
+			--length_required 30 \
+			-h {output[2]} -j {output[3]}
+		"""
+
+rule kraken2_classification:
+	input:
+		strand1="results/SRR2584863_1.trimmed.fastq",
+		strand2="results/SRR2584863_2.trimmed.fastq"
+	output:
+		report="results/kraken2_report.txt",
+		output="results/kraken2_output.txt"
+	params:
+		db="minikraken2_v2_8GB_201904_UPDATE"
+	shell:
+		"""
+		kraken2 --db {params.db} --paired {input.strand1} {input.strand2} \
+		--report {output.report} --output {output.output} \
+		--memory-mapping
+		"""
+		
